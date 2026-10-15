@@ -67,8 +67,18 @@ FAMILY_DOCK = 0x6000            # charging docks
 
 MAGIC1, MAGIC2 = 0x5A, 0xA5
 
-PAD_PACKET_LEN = 32
-PAD_REPORT_ID = 0x03
+# The Vader 5 Pro's command collection is the vendor page 0xFFEE, and unlike
+# the Apex 5 that openflydigi was written against it uses NUMBERED reports:
+#
+#     06 ee ff 09 00 a1 01  85 05  09 01  75 08 95 3f 81 02  ...  91 02  ...  b1 02
+#     usage page 0xFFEE     report id 5      63-byte input, output, feature
+#
+# So one request is the classic 64-byte Flydigi packet: report id 5, then the
+# 5A A5 envelope.  (The pad also exposes a 0xFFA0 collection with 32-byte
+# unnumbered reports that accepts writes and never answers - not this one.)
+PAD_PACKET_LEN = 64
+PAD_REPORT_ID = 0x05
+PAD_USAGE_PAGE = 0xFFEE
 PAD_USAGE_PAGE = 0xFFA0         # the vendor command collection
 
 DOCK_PACKET_LEN = 64
@@ -283,8 +293,8 @@ class Pad(Handle):
     report_id = PAD_REPORT_ID
 
     def build(self, cmd_id, payload=b""):
-        buf = bytearray(self.packet_len)
-        buf[0] = self.report_id
+        buf = bytearray(PAD_PACKET_LEN)
+        buf[0] = PAD_REPORT_ID
         buf[1] = MAGIC1
         buf[2] = MAGIC2
         buf[3] = cmd_id
@@ -348,14 +358,14 @@ class Dock(Handle):
 # picking a device
 # --------------------------------------------------------------------------
 def pick_pad(path=None):
-    """The pad's vendor command interface: family 0x2xxx, usage page 0xFFA0."""
+    """The pad's vendor command interface: family 0x2xxx, usage page 0xFFEE."""
     candidates = [d for d in enumerate_flydigi(FAMILY_PAD) if d["usage_page"] == PAD_USAGE_PAGE]
     if not candidates:
         candidates = [d for d in enumerate_flydigi(FAMILY_PAD) if d["usage_page"] >= 0xFF00]
     if not candidates:
         raise SystemExit(
-            "no Flydigi pad (VID 37D7, PID 2xxx, usage page 0xFFA0) found. "
-            "Is the pad connected?"
+            "no Flydigi pad (VID 37D7, PID 2xxx, usage page 0x%04X) found. "
+            "Is the pad connected?" % PAD_USAGE_PAGE
         )
     if path:
         for d in candidates:
