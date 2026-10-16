@@ -91,6 +91,7 @@ CMD_PAD_RESTART = 29
 SLEEP_MAX_MINUTES = 60
 
 CMD_DOCK_HEARTBEAT = 1
+REPORT_STATUS = 239              # unsolicited dock status, about 1 Hz
 CMD_SLEEP_WHEN_CHARGING = 17
 CMD_LED_SYNC = 18
 CMD_CLOSE_WITH_SYSTEM = 19
@@ -450,6 +451,42 @@ def cmd_dock_status(args):
     return 0
 
 
+def cmd_dock_watch(args):
+    """Watch the dock's unsolicited status: is a pad seated, and its battery.
+
+    The dock reports "docked" once a second.  If that flag flickers, the pad is
+    not making reliable contact with the dock's pins - which is what makes the
+    pad's USB connection drop and come back over and over.
+    """
+    d = pick_dock(args.device)
+    end = time.time() + args.seconds
+    last = None
+    changes = 0
+    with Dock(d["path"]) as dock:
+        while time.time() < end:
+            data = dock.read(500)
+            if not data:
+                continue
+            at = locate(data)
+            if at < 0:
+                continue
+            pkt = data[at:]
+            if pkt[2] != REPORT_STATUS or len(pkt) < 9:
+                continue
+            state = (bool(pkt[7]), pkt[8])
+            if state != last:
+                changes += 1
+                note = "" if last is None else "   <- changed"
+                print("%s  docked=%-5s battery=%d%s"
+                      % (time.strftime("%H:%M:%S"), state[0], state[1], note))
+                last = state
+    print()
+    print("dock state changes in %ds: %d" % (args.seconds, changes))
+    if changes > 2:
+        print("The docked flag is flickering: reseat the pad, clean the pins.")
+    return 0
+
+
 def cmd_dock_set(args, enable):
     cmd_id, field, label = DOCK_FLAGS[args.flag]
     d = pick_dock(args.device)
@@ -497,6 +534,9 @@ def main(argv=None):
     sub.add_parser("pad-restart", help="restart the pad (command 29)").set_defaults(func=cmd_pad_restart)
 
     sub.add_parser("status", help="CD2 dock firmware and switches").set_defaults(func=cmd_dock_status)
+    sp = sub.add_parser("dock-watch", help="watch the dock's docked/battery status")
+    sp.add_argument("--seconds", type=float, default=45.0)
+    sp.set_defaults(func=cmd_dock_watch)
     for name, enable in (("off", False), ("on", True)):
         sp = sub.add_parser(name, help="turn a dock switch %s" % name)
         sp.add_argument("flag", choices=sorted(DOCK_FLAGS))

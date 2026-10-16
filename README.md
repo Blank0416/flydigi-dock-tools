@@ -37,6 +37,35 @@ the pad does not merely go quiet, it **leaves the USB bus**; the dock's charging
 current then wakes it again a few seconds later, so the loop repeats forever.
 This is why playing never triggers it: input keeps resetting the timer.
 
+### The other failure mode: a bad dock contact
+
+The fix above removes the once-every-15-minutes drop. A **second**, much noisier
+failure mode is physical: if the pad does not sit firmly on the dock's pogo pins,
+the dock's own "docked" flag flickers - and the pad's USB connection is
+re-enumerated with every flicker.
+
+Measured on this machine with `dock-watch` (2026-10-16 14:28):
+
+~~~text
+14:28:02  docked=True  battery=6
+14:28:02  docked=False battery=6   <- changed
+14:28:03  docked=True  battery=6   <- changed
+14:28:05  docked=False battery=6   <- changed
+...
+dock state changes in 45s: 21
+~~~
+
+21 flips in 45 seconds, and each one lines up with a Kernel-PnP surprise removal
+of the pad. Nothing else on the USB bus was affected, and the dock itself had
+been connected since 12:00 - so it is the contact, not the dock or the host.
+
+What to do: lift the pad, reseat it squarely, and clean the dock's four pins and
+the pad's four contacts with isopropyl alcohol. Check that nothing holds the pad
+slightly up (a cable, a case). If the flicker survives that, the pins are worn -
+a warranty/parts problem, not a software one. To stop the noise meanwhile: charge
+the dock from a wall charger instead of the PC (the PC then never sees the pad),
+or use a data cable straight into the pad.
+
 ### The fix
 
 Set the pad's sleep timer to **never**:
@@ -56,6 +85,7 @@ Set the pad's sleep timer to **never**:
 |---|---|---|
 | `hid-list` | works | list every Flydigi HID interface (vendor 0x37D7) |
 | `status` | **verified** | CD2 dock type, firmware, and its four switches |
+| `dock-watch` | **verified** | watch the dock's docked/battery flag - flicker means bad contact |
 | `off sleep` / `on sleep` | **verified** | dock: sleep while docked (Flydigi calls it "Intelligent ...") |
 | `off led-sync` / `on led-sync` | **verified** | dock: lighting sync |
 | `off close-with-system` / `on close-with-system` | **verified** | dock: close when the PC shuts down |
@@ -147,6 +177,30 @@ is reported as missing on the bus.
 而是**直接离开 USB 总线**；底座充电电流几秒后把它唤醒，于是无限循环。
 所以玩的时候不会触发——有输入就会重置计时。
 
+### 另一种故障模式：底座触点接触不良
+
+上面那个修复解决"每 15 分钟掉一次"。还有**第二种**、吵闹得多的模式，是物理问题：
+手柄没有稳稳压到底座的 pogo 针上时，**底座自己的 docked 标志会来回跳**，手柄的 USB
+就跟着一次次重新枚举。
+
+本机用 `dock-watch` 实测（2026-10-16 14:28）：
+
+~~~text
+14:28:02  docked=True  battery=6
+14:28:02  docked=False battery=6   <- changed
+14:28:03  docked=True  battery=6   <- changed
+...
+dock state changes in 45s: 21
+~~~
+
+45 秒跳了 21 次，每一次都和手柄的一次 Kernel-PnP"意外移除"对上；同总线上其它设备
+一次都没掉，底座自身从 12:00 就一直在线 —— 所以问题在**触点**，不在底座或电脑。
+
+怎么办：把手柄拿起来重新放正压实，用**无水酒精**擦底座四个针和手柄底部四个触点；
+检查有没有东西把它微微顶起来（线缆、保护套）。擦完还跳，就是针磨损了 —— 保修/换件
+问题，不是软件问题。期间想清静：底座改接充电头（电脑端就完全看不到手柄），
+或者直接用数据线插手柄。
+
 ### 修复
 
 把手柄休眠时间改成**永不**：
@@ -165,6 +219,7 @@ is reported as missing on the bus.
 |---|---|---|
 | `hid-list` | 可用 | 列出所有飞智 HID 接口（VID 0x37D7） |
 | `status` | **已实机验证** | CD2 底座型号、固件、四个开关 |
+| `dock-watch` | **已实机验证** | 盯底座的 docked/电量标志 —— 跳动即触点接触不良 |
 | `off sleep` / `on sleep` | **已实机验证** | 底座：停靠时休眠（飞智叫 "Intelligent ..."） |
 | `off led-sync` / `on led-sync` | **已实机验证** | 底座：灯效同步 |
 | `off close-with-system` / `on close-with-system` | **已实机验证** | 底座：随电脑关机一起关 |
